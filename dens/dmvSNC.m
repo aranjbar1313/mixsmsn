@@ -19,3 +19,4 @@ function dens = dmvSNC (y, mu, Sigma, lambda, nu)
                  (1 - nu(1)) .* transpose(mvnpdf(y, mu, Sigma)) .* normcdf(transpose(sum(transpose(reshape(repmat(lambda * inv(matrix_sqrt(Sigma)), 1, n), p, n)) .* ...
                                                                                          (y - transpose(reshape(repmat(mu', 1, n), p, n))), 2))));
     rmpath('utils');
+end
