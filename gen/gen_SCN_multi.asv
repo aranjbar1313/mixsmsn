@@ -1,0 +1,12 @@
+function x1 =  gen_SCN_multi(n, mu, Sigma, shape, nu)
+% x1 = zeros(n,length(mu));
+% for i = 1 : n
+%     u = rand(1);
+%     if (u < nu(1))
+%         x1(i,:) = gen.SN.multi(1, mu, Sigma/nu(2), shape);
+%     else
+%         x1(i,:) = gen.SN.multi(1, mu, Sigma, shape);
+%     end
+% end
+
+u = rand(1,n)
