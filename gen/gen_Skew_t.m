@@ -8,7 +8,7 @@ if ~isscalar(n)
     [n, mu, sigma2, shape, nu] = deal(t{:});
 end
 
-y = mu + (random('gamma',nu/2, 2/nu,1,n)).^(-1/2).*gen_skew_normal(n, 0, sigma2, shape);
+y = mu + (random('gamma',nu/2, 2/nu,1,n)).^(-1/2).*gen_Skew_normal(n, 0, sigma2, shape);
 
 end
 

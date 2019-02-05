@@ -78,7 +78,7 @@ interval(end) = 1;
 cluster_proportion = diff(interval);
 clu = randsample(g,n,true,cluster_proportion);
 for i = 1 : g
-    x1(clu == i) = feval(rF1,[sum(clu==i),arg(clu(i),:)]);
+    x1(clu == i) = feval(rF1,[sum(clu==i),arg(i,:)]);
 end
 
 
