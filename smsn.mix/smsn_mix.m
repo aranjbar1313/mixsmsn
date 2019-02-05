@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%             EM algorithm for mixing             %%%%%%%%%%%%%
 
-function smsn_mix (y, nu, initial_values, settings)
+function out = smsn_mix (y, nu, initial_values, settings)
     % y: the data vector (sample) of size n
     % mu, sigma2, shape, pii: are the initial values for the EM algorithm. 
     %   Each of them must be a vector of size g (the algorithm understands 
@@ -228,4 +228,9 @@ function smsn_mix (y, nu, initial_values, settings)
             lk = lk1;
         end
     end
+    out.mu = mu;
+    out.sigma2 = sigma2;
+    out.shape = shape;
+    out.nu = nu;
+    out.pii = pii;
 end
