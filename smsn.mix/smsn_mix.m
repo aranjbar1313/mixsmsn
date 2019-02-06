@@ -143,9 +143,8 @@ function out = smsn_mix (y, nu, initial_values, settings)
             end
         end
     end
-    
-    if (settings.family == 't')
-        addpath('../dens')
+    addpath('../dens')
+    if strcmp(settings.family, 't')
         shape = zeros(1, g);
         lk = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
         n = numel(y);
@@ -227,7 +226,113 @@ function out = smsn_mix (y, nu, initial_values, settings)
             Gama_old = Gama;
             lk = lk1;
         end
+
+        if (settings.criteria)
+            [~, cl] = max(tal, [], 2);
+            icl = 0;
+            for j = 1 : g
+                icl = icl + sum(log(pii(j) .* dt_ls(y(cl == j), mu(j), sigma2(j), shape(j), nu)));
+            end
+        end
+    elseif strcmp(settings.family, 'Skew.t')
+        lk = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
+        n = numel(y);
+        Gama = zeros(1, g);
+        Delta = Gama;
+        delta = Gama;
+        for k = 1 : g
+            delta(k) = shape[k] ./ (sqrt(1 + shape(k).^2));
+            Delta(k) = sqrt(sigma2(k)) .* delta(k);
+            Gama(k) = sigma2(k) - Delta(k).^2;
+        end
+        
+        teta = cat(2, mu, Delta, Gama, pii, nu);
+        mu_old = mu;
+        Delta_old = Delta;
+        Gama_old = Gama;
+
+        criterio = 1;
+        count = 0;
+
+        while ((criterio > settings.error) && (count <= settings.iter_max))
+            count = count + 1;
+            tal = zeros(g, n);
+            S1 = zeros(g, n);
+            S2 = zeros(g, n);
+            S3 = zeros(g, n);
+            for j = 1 : g
+                dj = ((y - mu(j))./(sqrt(sigma2(j)))).^2;
+                Mtij2 = 1./(1 + (Delta(j).^2)*(Gama(j).^(-1)));
+                Mtij = sqrt(Mtij2);
+                mutij = Mtij2 .* Delta(j) .* (Gama(j).^(-1)) .* (y - mu(j));
+                A = mutij ./ Mtij;
+
+                E = (2 .* (nu).^(nu./2) .* gamma((2 + nu)./2) .* ...
+                    ((dj + nu + A.^2)).^(-(2 + nu)./2)) ./ (gamma(nu./2) .* pi .* sqrt(sigma2(j)) .* ...
+                    dt_ls(y, mu(j), sigma2(j), shape(j) ,nu));
+                u = ((4 .* (nu).^(nu./2) .* gamma((3 + nu)./2) .* (dj + nu).^(-(nu + 3)./2)) ./ ...
+                    (gamma(nu./2) .* sqrt(pi) .* sqrt(sigma2(j)) .* ...
+                    dt_ls(y, mu(j), sigma2(j),shape(j) ,nu)) ) .* ...
+                    tcdf(sqrt((3 + nu)./(dj + nu)) .* A, 3+nu);
+
+                d1 = dt_ls(y, mu(j), sigma2(j), shape(j), nu);
+                if (numel(d1 == 0))
+                    d1(d1 == 0) = intmin;
+                end
+                d2 = d_mixedST(y, pii, mu, sigma2, shape, nu);
+                if (numel(d2 == 0))
+                    d2(d2 == 0) = intmin;
+                end
+
+                tal(j, :) = d1 .* pii(j)./d2;
+                S1(j, :) = tal(j, :) .* u;
+                S2(j, :) = tal(j, :) .* (mutij .* u + Mtij .* E);
+                S3(j, :) = tal(j, :) .* (mutij .^ 2 .* u + Mtij2 + Mtij .* mutij .* E);
+
+                pii(j) = (1./n) .* sum(tal(j, :));
+                mu(j) = sum(S1(j, :) .* y - Delta_old(j) .* S2(j, :))./sum(S1(j, :));
+                Delta(j) = sum(S2(j, :) .* (y - mu(j))) ./ sum(S3(j, :));
+                Gama(j) = sum(S1(j, :) .* (y - mu(j)).^2 - 2 .* (y - mu(j)) .* Delta(j) .* S2(j, :) + Delta(j).^2 .* S3(j, :))./sum(tal(j, :));
+                sigma2(j) = Gama(j) + Delta(j).^2;
+                shape(j) = ((sigma2(j).^(-1/2)) .* Delta(j))./(sqrt(1 - (Delta(j).^2).*(sigma2(j).^(-1))));
+            end
+
+            logvero_ST = @(nu) -1*sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
+            options = optimset('TolX', 0.000001);
+            nu = fminbnd(logvero_ST, 0, 100, options);
+            lk1 = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
+            pii(g) = 1 - (sum(pii) - pii(g));
+
+            zero_pos = pii == 0;
+            if (any(zero_pos))
+                pii(zero_pos) = 10^-10;
+                pii(pii == max(pii)) = max(pii) - sum(pii(zero_pos));
+            end
+
+            param = teta;
+            teta = cat(2, mu, Delta, Gama, pii, nu);
+            criterio = abs(lk1./lk - 1);
+
+            mu_old = mu;
+            Delta_old = Delta;
+            Gama_old = Gama;
+            lk = lk1;
+        end
+
+        if (settings.criteria)
+            [~, cl] = max(tal, [], 2);
+            icl = 0;
+            for j = 1 : g
+                icl = icl + sum(log(pii(j) .* dt_ls(y(cl == j), mu(j), sigma2(j), shape(j), nu)));
+            end
+        end
+
+    elseif strcmp(family, 'Skew.normal')
+        
+    elseif strcmp(family, 'Normal')
+        
     end
+
     out.mu = mu;
     out.sigma2 = sigma2;
     out.shape = shape;
