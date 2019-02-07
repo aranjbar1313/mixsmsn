@@ -211,8 +211,8 @@ function out = smsn_mix (y, nu, initial_values, settings)
             
                 toc
             end
-            
-            logvero_ST = @(nu) -1*sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
+            [counts, centers] = hist(y, 1000);
+            logvero_ST = @(nu) -1*sum(counts .* log(d_mixedST(centers, pii, mu, sigma2, shape, nu)));
             options = optimset('TolX', 0.0001);
             tic
             nu = fminbnd(logvero_ST, 0, 100, options);
