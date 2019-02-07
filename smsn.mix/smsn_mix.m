@@ -185,11 +185,11 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 
                 d1 = dt_ls(y, mu(j), sigma2(j), shape(j), nu);
                 if (numel(d1 == 0))
-                    d1(d1 == 0) = intmin;
+                    d1(d1 == 0) = 1/intmax;
                 end
                 d2 = d_mixedST(y, pii, mu, sigma2, shape, nu);
                 if (numel(d2 == 0))
-                    d2(d2 == 0) = intmin;
+                    d2(d2 == 0) = 1/intmax;
                 end
 
                 tal(j, :) = d1 .* pii(j)./d2;
@@ -277,11 +277,11 @@ function out = smsn_mix (y, nu, initial_values, settings)
 
                 d1 = dt_ls(y, mu(j), sigma2(j), shape(j), nu);
                 if (numel(d1 == 0))
-                    d1(d1 == 0) = intmin;
+                    d1(d1 == 0) = 1/intmax;
                 end
                 d2 = d_mixedST(y, pii, mu, sigma2, shape, nu);
                 if (numel(d2 == 0))
-                    d2(d2 == 0) = intmin;
+                    d2(d2 == 0) = 1/intmax;
                 end
 
                 tal(j, :) = d1 .* pii(j)./d2;
@@ -328,9 +328,209 @@ function out = smsn_mix (y, nu, initial_values, settings)
         end
 
     elseif strcmp(family, 'Skew.normal')
-        
+        lk = sum(log(d_mixedSN(y, pii, mu, sigma2, shape)));
+        n = numel(y);
+        Gama = zeros(1, g);
+        Delta = Gama;
+        delta = Gama;
+        for k = 1 : g 
+            delta(k) = shape(k) ./ (sqrt(1 + shape(k).^2));
+            Delta(k) = sqrt(sigma2(k)) .* delta(k);
+            Gama(k) = sigma2(k) - Delta(k).^2;
+        end
+
+        teta = cat(2, mu, Delta, Gama, pii, nu);
+        mu_old = mu;
+        Delta_old = Delta;
+        Gama_old = Gama;
+
+        criterio = 1;
+        count = 0;
+
+        while ((criterio > settings.error) && (count <= settings.iter_max))
+            count = count + 1;
+            tal = zeros(g, n);
+            S1 = zeros(g, n);
+            S2 = zeros(g, n);
+            S3 = zeros(g, n);
+            for j = 1 : g
+                Mtij2 = 1./(1 + (Delta(j).^2) .* (Gama(j).^(-1)));
+                Mtij = sqrt(Mtij2);
+                mutij = Mtij2 .* Delta(j) .* (Gamma(j).^(-1)) .* (y - mu(j));
+
+                prob = normcdf(mutij ./ Mtij);
+                if (numel(prob == 0))
+                    prob(prob == 0) = 1/intmax;
+                end
+                E = normpdf(mutij./mutij) ./ prob;
+                u = ones(1, n);
+                
+                d1 = dSN(y, mu(j), sigma2(j), shape(j));
+                if (numel(d1 == 0))
+                    d1(d1 == 0) = 1/intmax;
+                end
+                d2 = d_mixedSN(y, pii, mu, sigma2, shape);
+                if (numel(d2 == 0))
+                    d2(d2 == 0) = 1/intmax;
+                end
+
+                tal(j, :) = d1 .* pii(j)./d2;
+
+                S1(j, :) = tal(j, :) .* u;
+                S2(j, :) = tal(j, :) .* (mutij .* u + Mtij .* E);
+                S3(j, :) = tal(j, :) .* (mutij.^2 .* u + Mtij2 + Mtij .* mutij .* E);
+
+                pii(j) = (1./n) .* sum(tal(j, :));
+                mu(j) = sum(S1(j, :) .* y - Delta_old(j) .* S2(j, :))./sum(S1(j, :));
+                Delta(j) = sum(S2(j, :) .* (y - mu(j)))./sum(S3(j, :));
+                Gama(j) = sum(S1(j, :) .* (y - mu(j)).^2 - 2 .* (y - mu(j)) .* Delta(j) .* S2(j, :) + Delta(j).^2 * S3(j, :))./sum(tal(j, :));
+                sigma2(j) = Gama(j) + Delta(j).^2;
+                shape(j) = ((sigma2(j).^(-1/2)) .* Delta(j))./(sqrt(1 - (Delta(j).^2) .* (sigma2(j).^(-1))));
+            end
+            
+            pii(g) = 1 - (sum(pii) - pii(g));
+
+            zero_pos = pii == 0;
+            if (numel(zero_pos))
+                pii(zero_pos) = 10^-10;
+                pii(pii == max(pii)) = max(pii) - sum(pii(zero_pos));
+            end
+
+            param = teta;
+            teta = cat(2, mu, Delta, Gama, pii);
+            lk1 = sum(log(d_mixedSN(y, pii, mu, sigma2, shape)));
+            criterio = abs(lk1./lk - 1);
+
+            mu_old = mu;
+            Delta_old = Delta;
+            Gama_old = Gama;
+            lk = lk1;
+        end
+
+        if (settings.criteria)
+            [~, cl] = max(tal, [], 2);
+            icl = 0;
+            for j = 1 : g
+                icl = icl + sum(log(pii(j) .* dSN(y(cl == j), mu(j), sigma2(j), shape(j))));
+            end
+        end
+
     elseif strcmp(family, 'Normal')
         
+        shape = zeros(1, g);
+        lk = sum(log(d_mixedSN(y, pii, mu, sigma2, shape)));
+        n = numel(y);
+        Gama = zeros(1, g);
+        Delta = Gama;
+        delta = Gama;
+        for k = 1 : g 
+            Gama(k) = sigma2(k) - Delta(k).^2;
+        end
+
+        teta = cat(2, mu, Delta, Gama, pii);
+        mu_old = mu;
+        Delta_old = Delta;
+        Gama_old = Gama;
+
+        criterio = 1;
+        count = 0;
+
+        while ((criterio > settings.error) && (count <= settings.iter_max))
+            count = count + 1;
+            tal = zeros(g, n);
+            S1 = zeros(g, n);
+            S2 = zeros(g, n);
+            S3 = zeros(g, n);
+            for j = 1 : g
+                Mtij2 = 1./(1 + (Delta(j).^2) .* (Gama(j).^(-1)));
+                Mtij = sqrt(Mtij2);
+                mutij = Mtij2 .* Delta(j) .* (Gamma(j).^(-1)) .* (y - mu(j));
+
+                prob = normcdf(mutij ./ Mtij);
+                if (numel(prob == 0))
+                    prob(prob == 0) = 1/intmax;
+                end
+                E = normpdf(mutij./mutij) ./ prob;
+                u = ones(1, n);
+                
+                d1 = dSN(y, mu(j), sigma2(j), shape(j));
+                if (numel(d1 == 0))
+                    d1(d1 == 0) = 1/intmax;
+                end
+                d2 = d_mixedSN(y, pii, mu, sigma2, shape);
+                if (numel(d2 == 0))
+                    d2(d2 == 0) = 1/intmax;
+                end
+
+                tal(j, :) = d1 .* pii(j)./d2;
+                S1(j, :) = tal(j, :) .* u;
+                S2(j, :) = tal(j, :) .* (mutij .* u + Mtij .* E);
+                S3(j, :) = tal(j, :) .* (mutij.^2 .* u + Mtij2 + Mtij .* mutij .* E);
+
+                pii(j) = (1./n) .* sum(tal(j, :));
+                mu(j) = sum(S1(j, :) .* y - Delta_old(j) .* S2(j, :))./sum(S1(j, :));
+                Delta(j) = 0;
+                Gama(j) = sum(S1(j, :) .* (y - mu(j)).^2 - 2 .* (y - mu(j)) .* Delta(j) .* S2(j, :) + Delta(j).^2 * S3(j, :))./sum(tal(j, :));
+                sigma2(j) = Gama(j) + Delta(j).^2;
+                shape(j) = 0;
+            end
+            
+            pii(g) = 1 - (sum(pii) - pii(g));
+
+            zero_pos = pii == 0;
+            if (numel(zero_pos))
+                pii(zero_pos) = 10^-10;
+                pii(pii == max(pii)) = max(pii) - sum(pii(zero_pos));
+            end
+
+            param = teta;
+            teta = cat(2, mu, Delta, Gama, pii);
+            lk1 = sum(log(d_mixedSN(y, pii, mu, sigma2, shape)));
+            criterio = abs(lk1./lk - 1);
+
+            mu_old = mu;
+            Delta_old = Delta;
+            Gama_old = Gama;
+            lk = lk1;
+        end
+
+        if (settings.criteria)
+            [~, cl] = max(tal, [], 2);
+            icl = 0;
+            for j = 1 : g
+                icl = icl + sum(log(pii(j) .* dSN(y(cl == j), mu(j), sigma2(j), shape(j))));
+            end
+        end
+
+    end
+
+    if settings.criteria
+        if (strcmp(settings.family, 't') || strcmp(settings.family, 'Normal'))
+            d = g .* 2 + (g - 1);
+        else
+            d = g .* 3 + (g - 1);
+        end
+        aic = -2 .* lk + 2 .* d;
+        bic = -2 .* lk + log(n) .* d;
+        edc = -2 .* lk + 0.2 .* sqrt(n) .* d;
+        icl = -2 .* icl + log(n) .* d;
+        
+        out.aic = aic;
+        out.bic = bic;
+        out.edc = edc;
+        out.icl = icl;
+    end
+
+    if ~settings.group
+
+    end
+
+    if settings.obs_prob
+        
+    end 
+
+    if settings.calc_im
+
     end
 
     out.mu = mu;
@@ -338,4 +538,8 @@ function out = smsn_mix (y, nu, initial_values, settings)
     out.shape = shape;
     out.nu = nu;
     out.pii = pii;
+    out.iter = count;
+    out.n = numel(y);
+    out.group = cl;
+
 end
