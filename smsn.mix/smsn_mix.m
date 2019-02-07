@@ -143,8 +143,10 @@ function out = smsn_mix (y, nu, initial_values, settings)
             end
         end
     end
-    addpath('../dens')
+    addpath('./dens')
     if strcmp(settings.family, 't')
+        
+        
         shape = zeros(1, g);
         lk = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
         n = numel(y);
@@ -161,14 +163,17 @@ function out = smsn_mix (y, nu, initial_values, settings)
 
         criterio = 1;
         count = 0;
-
+        
         while ((criterio > settings.error) && (count <= settings.iter_max))
+            
             count = count + 1;
             tal = zeros(g, n);
             S1 = zeros(g, n);
             S2 = zeros(g, n);
             S3 = zeros(g, n);
             for j = 1 : g
+                
+                tic
                 dj = ((y - mu(j))./(sqrt(sigma2(j)))).^2;
                 Mtij2 = 1./(1 + (Delta(j).^2)*(Gama(j).^(-1)));
                 Mtij = sqrt(Mtij2);
@@ -203,14 +208,20 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 Gama(j) = sum(S1(j, :) .* (y - mu(j)).^2 - 2 .* (y - mu(j)) .* Delta(j) .* S2(j, :) + Delta(j).^2 .* S3(j, :))./sum(tal(j, :));
                 sigma2(j) = Gama(j) + Delta(j).^2;
                 shape(j) = 0;
+            
+                toc
             end
             
             logvero_ST = @(nu) -1*sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
-            options = optimset('TolX', 0.000001);
+            options = optimset('TolX', 0.0001);
+            tic
             nu = fminbnd(logvero_ST, 0, 100, options);
+            disp('nu')
+            disp(nu)
+            toc
             lk1 = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
             pii(g) = 1 - (sum(pii) - pii(g));
-
+            
             zero_pos = pii == 0;
             if (any(zero_pos))
                 pii(zero_pos) = 10^-10;
@@ -225,6 +236,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
             Delta_old = Delta;
             Gama_old = Gama;
             lk = lk1;
+            disp(count)
         end
 
         if (settings.criteria)
@@ -234,6 +246,8 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 icl = icl + sum(log(pii(j) .* dt_ls(y(cl == j), mu(j), sigma2(j), shape(j), nu)));
             end
         end
+
+        disp(count)
     elseif strcmp(settings.family, 'Skew.t')
         lk = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
         n = numel(y);
@@ -241,7 +255,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
         Delta = Gama;
         delta = Gama;
         for k = 1 : g
-            delta(k) = shape[k] ./ (sqrt(1 + shape(k).^2));
+            delta(k) = shape(k) ./ (sqrt(1 + shape(k).^2));
             Delta(k) = sqrt(sigma2(k)) .* delta(k);
             Gama(k) = sigma2(k) - Delta(k).^2;
         end
