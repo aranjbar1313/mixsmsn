@@ -208,17 +208,12 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 Gama(j) = sum(S1(j, :) .* (y - mu(j)).^2 - 2 .* (y - mu(j)) .* Delta(j) .* S2(j, :) + Delta(j).^2 .* S3(j, :))./sum(tal(j, :));
                 sigma2(j) = Gama(j) + Delta(j).^2;
                 shape(j) = 0;
-            
-                toc
             end
-            [counts, centers] = hist(y, 1000);
+            nbins = (max(y) - min(y)) * 100;
+            [counts, centers] = hist(y, nbins);
             logvero_ST = @(nu) -1*sum(counts .* log(d_mixedST(centers, pii, mu, sigma2, shape, nu)));
-            options = optimset('TolX', 0.0001);
-            tic
+            options = optimset('TolX', 0.000001);
             nu = fminbnd(logvero_ST, 0, 100, options);
-            disp('nu')
-            disp(nu)
-            toc
             lk1 = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
             pii(g) = 1 - (sum(pii) - pii(g));
             
@@ -311,7 +306,9 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 shape(j) = ((sigma2(j).^(-1/2)) .* Delta(j))./(sqrt(1 - (Delta(j).^2).*(sigma2(j).^(-1))));
             end
 
-            logvero_ST = @(nu) -1*sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
+            nbins = (max(y) - min(y)) * 100;
+            [counts, centers] = hist(y, nbins);
+            logvero_ST = @(nu) -1*sum(counts .* log(d_mixedST(centers, pii, mu, sigma2, shape, nu)));
             options = optimset('TolX', 0.000001);
             nu = fminbnd(logvero_ST, 0, 100, options);
             lk1 = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
