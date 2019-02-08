@@ -264,6 +264,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
         count = 0;
 
         while ((criterio > settings.error) && (count <= settings.iter_max))
+            disp(count)
             count = count + 1;
             tal = zeros(g, n);
             S1 = zeros(g, n);
@@ -309,6 +310,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
             nbins = (max(y) - min(y)) * 100;
             [counts, centers] = hist(y, nbins);
             logvero_ST = @(nu) -1*sum(counts .* log(d_mixedST(centers, pii, mu, sigma2, shape, nu)));
+%             logvero_ST = @(nu) -1*sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
             options = optimset('TolX', 0.000001);
             nu = fminbnd(logvero_ST, 0, 100, options);
             lk1 = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
@@ -337,6 +339,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 icl = icl + sum(log(pii(j) .* dt_ls(y(cl == j), mu(j), sigma2(j), shape(j), nu)));
             end
         end
+        
 
     elseif strcmp(family, 'Skew.normal')
         lk = sum(log(d_mixedSN(y, pii, mu, sigma2, shape)));
@@ -367,7 +370,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
             for j = 1 : g
                 Mtij2 = 1./(1 + (Delta(j).^2) .* (Gama(j).^(-1)));
                 Mtij = sqrt(Mtij2);
-                mutij = Mtij2 .* Delta(j) .* (Gamma(j).^(-1)) .* (y - mu(j));
+                mutij = Mtij2 .* Delta(j) .* (Gama(j).^(-1)) .* (y - mu(j));
 
                 prob = normcdf(mutij ./ Mtij);
                 if (numel(prob == 0))
@@ -455,7 +458,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
             for j = 1 : g
                 Mtij2 = 1./(1 + (Delta(j).^2) .* (Gama(j).^(-1)));
                 Mtij = sqrt(Mtij2);
-                mutij = Mtij2 .* Delta(j) .* (Gamma(j).^(-1)) .* (y - mu(j));
+                mutij = Mtij2 .* Delta(j) .* (Gama(j).^(-1)) .* (y - mu(j));
 
                 prob = normcdf(mutij ./ Mtij);
                 if (numel(prob == 0))
