@@ -145,10 +145,10 @@ function out = smsn_mix (y, nu, initial_values, settings)
     end
     addpath('./dens')
     if strcmp(settings.family, 't')
-        
-        
+        iter_time = 0;
         shape = zeros(1, g);
-        lk = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
+        mixed_densities = d_mixedST(y, pii, mu, sigma2, shape, nu);
+        lk = sum(log(mixed_densities));
         n = numel(y);
         Gama = zeros(1, g);
         Delta = Gama;
@@ -165,38 +165,46 @@ function out = smsn_mix (y, nu, initial_values, settings)
         count = 0;
         
         while ((criterio > settings.error) && (count <= settings.iter_max))
-            
+            tic
             count = count + 1;
             tal = zeros(g, n);
             S1 = zeros(g, n);
             S2 = zeros(g, n);
             S3 = zeros(g, n);
+
             for j = 1 : g
-                
-                tic
-                dj = ((y - mu(j))./(sqrt(sigma2(j)))).^2;
-                Mtij2 = 1./(1 + (Delta(j).^2)*(Gama(j).^(-1)));
+                % tic
+                dj = ((y - mu(j)).^2)./sigma2(j);
+                Mtij2 = 1./(1 + (Delta(j).^2)./Gama(j));
                 Mtij = sqrt(Mtij2);
-                mutij = Mtij2 .* Delta(j) .* (Gama(j).^(-1)) .* (y - mu(j));
+                mutij = Mtij2 .* Delta(j) ./ Gama(j) .* (y - mu(j));
                 A = mutij ./ Mtij;
-
-                E = (2 .* (nu).^(nu./2) .* gamma((2 + nu)./2) .* ...
-                    ((dj + nu + A.^2)).^(-(2 + nu)./2)) ./ (gamma(nu./2) .* pi .* sqrt(sigma2(j)) .* ...
-                    dt_ls(y, mu(j), sigma2(j), shape(j) ,nu));
-                u = ((4 .* (nu).^(nu./2) .* gamma((3 + nu)./2) .* (dj + nu).^(-(nu + 3)./2)) ./ ...
-                    (gamma(nu./2) .* sqrt(pi) .* sqrt(sigma2(j)) .* ...
-                    dt_ls(y, mu(j), sigma2(j),shape(j) ,nu)) ) .* ...
-                    tcdf(sqrt((3 + nu)./(dj + nu)) .* A, 3+nu);
                 
-                d1 = dt_ls(y, mu(j), sigma2(j), shape(j), nu);
-                if (numel(d1 == 0))
-                    d1(d1 == 0) = 1/intmax;
+                uni_densities = dt_ls(y, mu(j), sigma2(j), shape(j), nu);
+                % tic
+                coeff = (nu).^(nu./2) ./ gamma(nu./2) ./ sqrt(sigma2(j)); 
+                E = (2 .* gamma((2 + nu)./2) .* ...
+                    ((dj + nu + A.^2)).^(-(2 + nu)./2)) ./ (pi .* uni_densities) .* coeff;
+                u = ((4 .* gamma((3 + nu)./2) .* (dj + nu).^(-(nu + 3)./2)) ./ ...
+                    (sqrt(pi) .* uni_densities) .* coeff ) .* ...
+                    tcdf(sqrt((3 + nu)./(dj + nu)) .* A, 3+nu);
+                % toc
+                
+                % tic
+                d1 = uni_densities;
+                % toc
+                % tic
+                zero_pos = d1 == 0;
+                if (sum(zero_pos))
+                    d1(zero_pos) = 1/intmax;
                 end
+                
                 d2 = d_mixedST(y, pii, mu, sigma2, shape, nu);
-                if (numel(d2 == 0))
-                    d2(d2 == 0) = 1/intmax;
+                zero_pos = d2 == 0;
+                if (sum(zero_pos))
+                    d2(zero_pos) = 1/intmax;
                 end
-
+                % toc
                 tal(j, :) = d1 .* pii(j)./d2;
                 S1(j, :) = tal(j, :) .* u;
                 S2(j, :) = tal(j, :) .* (mutij .* u + Mtij .* E);
@@ -208,7 +216,13 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 Gama(j) = sum(S1(j, :) .* (y - mu(j)).^2 - 2 .* (y - mu(j)) .* Delta(j) .* S2(j, :) + Delta(j).^2 .* S3(j, :))./sum(tal(j, :));
                 sigma2(j) = Gama(j) + Delta(j).^2;
                 shape(j) = 0;
+                % disp('-----------------------------------------------')
             end
+            % mu = new_mu;
+            % sigma2 = new_sigma2;
+            % shape = new_shape;
+            % pii = new_pii;
+            % tic
             nbins = (max(y) - min(y)) * 100;
             [counts, centers] = hist(y, nbins);
             logvero_ST = @(nu) -1*sum(counts .* log(d_mixedST(centers, pii, mu, sigma2, shape, nu)));
@@ -231,7 +245,10 @@ function out = smsn_mix (y, nu, initial_values, settings)
             Delta_old = Delta;
             Gama_old = Gama;
             lk = lk1;
-            disp(count)
+            % disp(count)
+            % toc
+            iter_time = iter_time + toc;
+            % disp('___________________________________________________________________')
         end
 
         if (settings.criteria)
@@ -241,7 +258,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 icl = icl + sum(log(pii(j) .* dt_ls(y(cl == j), mu(j), sigma2(j), shape(j), nu)));
             end
         end
-
+        mean_iter_time = iter_time/count
         disp(count)
     elseif strcmp(settings.family, 'Skew.t')
         lk = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
