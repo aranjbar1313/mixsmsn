@@ -88,7 +88,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
 
         k_iter_max = 50;
         n_start = 1;
-%         algorithm = 'Hartigan-Wong';
+        % algorithm = 'Hartigan-Wong';
         if (isfield(settings, 'kmeans_param'))
             kmeans_param = settings.kmeans_param;
             if (isfield(kmeans_param, 'iter_max')) 
@@ -98,7 +98,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 n_start = kmeans_param.n_start;
             end
             if (isfield(kmeans_param, 'algorithm'))
-%                 algorithm = kmeans_param.algorithm;
+                % algorithm = kmeans_param.algorithm;
             end
         end
     
@@ -327,7 +327,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
             nbins = (max(y) - min(y)) * 100;
             [counts, centers] = hist(y, nbins);
             logvero_ST = @(nu) -1*sum(counts .* log(d_mixedST(centers, pii, mu, sigma2, shape, nu)));
-%             logvero_ST = @(nu) -1*sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
+            % logvero_ST = @(nu) -1*sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
             options = optimset('TolX', 0.000001);
             nu = fminbnd(logvero_ST, 0, 100, options);
             lk1 = sum(log(d_mixedST(y, pii, mu, sigma2, shape, nu)));
@@ -370,7 +370,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
             Gama(k) = sigma2(k) - Delta(k).^2;
         end
 
-        teta = cat(2, mu, Delta, Gama, pii, nu);
+        teta = cat(2, mu, Delta, Gama, pii);
         mu_old = mu;
         Delta_old = Delta;
         Gama_old = Gama;
@@ -393,7 +393,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 if (numel(prob == 0))
                     prob(prob == 0) = 1/intmax;
                 end
-                E = normpdf(mutij./mutij) ./ prob;
+                E = normpdf(mutij./Mtij) ./ prob;
                 u = ones(1, n);
                 
                 d1 = dSN(y, mu(j), sigma2(j), shape(j));
@@ -437,6 +437,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
             Gama_old = Gama;
             lk = lk1;
         end
+        count
 
         if (settings.criteria)
             [~, cl] = max(tal, [], 2);
@@ -481,7 +482,7 @@ function out = smsn_mix (y, nu, initial_values, settings)
                 if (numel(prob == 0))
                     prob(prob == 0) = 1/intmax;
                 end
-                E = normpdf(mutij./mutij) ./ prob;
+                E = normpdf(mutij./Mtij) ./ prob;
                 u = ones(1, n);
                 
                 d1 = dSN(y, mu(j), sigma2(j), shape(j));
