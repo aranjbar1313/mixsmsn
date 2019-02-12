@@ -2,7 +2,7 @@
 clear;clc;
 addpath(genpath('.'))
 % arg = [-2, 12, -1, 23; 1, 17, 8, 23];
-arg = [-3, 4, -3; 3, 2, 3];
+arg = [-1, 4, -3; 1, 2, 3];
 [y,clu] = rmix(1e5, [0.3,0.7], 'Skew_normal', arg);
 x = linspace(min(y), max(y), 1000);
 % dens = d_mixedST(x, [0.3,0.7], arg(:,1), arg(:,2), arg(:,3), arg(1,4));
@@ -16,7 +16,7 @@ settings.group = true;
 settings.error = 1e-6;
 settings.iter_max = 1000;
 settings.calc_im = true;
-settings.obs_prob = false;
+settings.obs_prob = true;
 initial_values.g = 2;
 init_nu = 1;
 
