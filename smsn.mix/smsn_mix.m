@@ -551,6 +551,9 @@ function out = smsn_mix (y, nu, initial_values, settings)
         out.bic = bic;
         out.edc = edc;
         out.icl = icl;
+        out.group = cl;
+    else
+        [~, out.group] = max(tal, [], 1);
     end
 
     if ~settings.group
@@ -558,8 +561,17 @@ function out = smsn_mix (y, nu, initial_values, settings)
     end
 
     if settings.obs_prob
-        
+        out.obs_prob = tal;
+        if (nrow(tal) > 1) 
+            out.obs_prob(nrow(tal), :) = 1 - sum(out.obs_prob(1 : nrow(tal) - 1, :));
+        else
+            out.obs_prob(nrow(tal), :) = 1 - out.obs_prob(1, :);
+        end
+        negetive_pos = out.obs_prob < 0;
+        out.obs_prob(negetive_pos) = 0.0;
+        out.obs_prob = round(out.obs_prob, 10);
     end 
+    out.family = family;
 
     if settings.calc_im
 
@@ -572,6 +584,5 @@ function out = smsn_mix (y, nu, initial_values, settings)
     out.pii = pii;
     out.iter = count;
     out.n = numel(y);
-    out.group = cl;
 
 end
