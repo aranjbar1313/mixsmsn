@@ -143,7 +143,6 @@ function out = smsn_mix (y, nu, initial_values, settings)
             end
         end
     end
-    addpath('./dens')
     if strcmp(settings.family, 't')
         iter_time = 0;
         shape = zeros(1, g);

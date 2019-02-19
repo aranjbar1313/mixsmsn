@@ -9,7 +9,7 @@ function dens = d_mixedmvST (y, pi1, mu, Sigma, lambda, nu)
 
     g = numel(pi1);
     dens = 0;
-    for (j = 1 : g) 
+    for j = 1 : g
         dens = dens + pi1(j) .* dmvt_ls(y, mu{j}, Sigma{j}, lambda{j}, nu);
     end
 end

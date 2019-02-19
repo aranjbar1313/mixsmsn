@@ -1,8 +1,5 @@
 function out = imm_smsn(y, model)
 
-addpath('../dens');
-addpath('../utiles');
-
 adjoint = @(A) det(A)*inv(A);
 deriv_der = @(A,B,C) det(A)*sum(B * transpose(C), 'all');
 

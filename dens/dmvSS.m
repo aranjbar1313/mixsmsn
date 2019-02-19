@@ -16,7 +16,6 @@ function resp = dmvSS (y, mu, Sigma, lambda, nu)
     p = ncol(y);
     resp = zeros(1, n);
 
-    addpath('utils');
     for i = 1 : n
         di = mahalanobis(y(i,:), mu, Sigma);
         f = @(u) 2 .* nu .* u.^(nu - 1) .* ...
@@ -24,5 +23,4 @@ function resp = dmvSS (y, mu, Sigma, lambda, nu)
                     normcdf(u.^(1/2) .* (lambda * inv(matrix_sqrt(Sigma)) * transpose(y(i, :) - mu)));
         resp(i) = integral(f, 0, 1);
     end
-    rmpath('utils');
 end
