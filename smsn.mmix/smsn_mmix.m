@@ -107,7 +107,122 @@ function out = smsn_mmix(y, nu, initial_values, settings)
     end
 
     if strcmp(family, 't')
+        delta = cell(1, g);
+        Delta = cell(1, g);
+        Gama = cell(1, g);
 
+        for k = 1 : g
+            Delta{k} = zeros(1, p);
+            shape{k} = zeros(1, p);
+            Gama{k} = Sigma{k} - transpose(Delta{k}) * Delta{k};
+        end
+
+        if settings.uni_Gama
+            Gama_uni = plus(Gama{:}) / g;
+            Gama(:) = {Gama_uni};
+        end
+
+        mu_old = mu;
+        Delta_old = Delta;
+        Gama_old = Gama;
+
+        criterio = 1;
+        count = 0;
+        lkante = 1;
+        while ((criterio > settings.error) && (count <= settings.iter_max))
+            tic
+            count = count + 1;
+            tal = zeros(n, g);
+            S1 = zeros(n, g);
+            S2 = zeros(n, g);
+            S3 = zeros(n, g);
+            for j = 1 : g 
+                Dif = y - repmat(mu{j}, [n, 1]);
+                Mtij2 = 1./(1 + Delta{j} * (Gama{j} \ transpose(Delta{j})));
+                Mtij = sqrt(Mtij2);
+                mtuij = sum(repmat(Mtij2 .* (Delta{j} / Gama{j}), [n, 1]) .* Dif, 2);
+                A = mtuij ./ Mtij;
+                mahalanobis = @(x, mu, Sigma) diag((x - mu) / Sigma * transpose(x - mu));
+                dj = mahalanobis(y, mu{j}, Sigma{j});
+                
+                E = (2 .* (nu).^(nu./2) .* gamma((p + nu + 1)./2) .* ((dj + nu + A.^2)).^(-(p + nu + 1)./2))./(gamma(nu./2) .* (sqrt(pi)).^(p + 1) .* sqrt(det(Sigma{j})) .* dmvt_ls(y, mu{j}, Sigma{j}, shape{j}, nu));
+                u = ((4 .* (nu).^(nu./2) .* gamma((p + nu + 2)./2) .* (dj + nu).^(-(p + nu + 2)./2))./(gamma(nu./2) .* sqrt(pi.^p) .* sqrt(det(Sigma{j})) .* dmvt_ls(y, mu{j}, Sigma{j}, shape{j}, nu))) .* tcdf(sqrt((p + nu + 2) ./ (dj + nu)) .* A, p + nu + 2);
+
+                d1 = dmvt_ls(y, mu{j}, Sigma{j}, shape{j}, nu);
+                if sum(d1 == 0)
+                    d1(d1 == 0) = 1/intmax;
+                end
+                d2 = d_mixedmvST(y, pii, mu, Sigma, shape, nu);
+                if sum(d2 == 0)
+                    d2(d2 == 0) = 1/intmax;
+                end
+
+                tal(:, j) = d1 .* pii(j)./d2;
+                S1(:, j) = tal(:, j) .* u;
+                S2(:, j) = tal(:, j) .* (mtuij .* u + Mtij .* E);
+                S3(:, j) = tal(:, j) .* (mtuij.^2 .* u + Mtij2 + Mtij .* mtuij .* E);
+
+                pii(j) = (1./n) .* sum(tal(:, j));
+
+                mu{j} = sum(S1(:, j) .* y - S2(:, j) .* repmat(Delta_old{j}, [n, 1]), 1)./sum(S1(:, j));
+                Dif = y - mu{j};
+                Delta{j} = sum(S2(:, j) .* Dif, 1)./sum(S3(:, j));
+                
+                sum2 = zeros(p);
+                for i = 1 : n
+                    sum2 = sum2 + (S1(i, j) .* (transpose(y(i, :) - mu{j})) * (y(i, :) - mu{j}) - ...
+                                   S2(i, j) .* (transpose(Delta{j}) * (y(i, :) - mu{j})) - ...
+                                   S2(i, j) .* (transpose(y(i, :) - mu{j}) * (Delta{j})) + ...
+                                   S3(i, j) .* (transpose(Delta{j}) * (Delta{j})));
+                end
+
+                Gama{j} = sum2 ./ sum(tal(:, j));
+
+                if ~settings.uni_Gama
+                    Sigma{j} = Gama{j} + transpose(Delta{j}) * Delta{j};
+                    shape{j} = zeros(1, p);
+                end
+            end
+            %{
+            if settings.uni_Gama
+                GS = 0;
+                for j = 1 : g 
+                    GS = GS %+ (tal(:, j) .* Gama{j});
+                end
+                Gama_uni = transpose(sum(transpose(GS), 2))
+                for j = 1 : g 
+                    Gama{j} = Gama_uni;
+                    Sigma{j} = Gama{j} + transpose(Delta{j}) * Delta{j};
+                    shape{j} = zeros(1, p);
+                end
+            end
+            %}
+
+            logvero_ST = @(nu) -1*sum(log(d_mixedmvST(y, pii, mu, Sigma, shape, nu)));
+            options = optimset('TolX', 0.000001);
+            nu = fminbnd(logvero_ST, 0, 100, options);
+            pii(g) = 1 - (sum(pii) - pii(g));
+
+            zero_pos = pii == 0;
+            pii(zero_pos) = 1e-10;
+            pii(pii == max(pii)) = max(pii) - sum(pii(zero_pos));
+
+            lk = sum(log(d_mixedmvST(y, pii, mu, Sigma, shape, nu)));
+            criterio = abs((lk./lkante) - 1);
+
+            lkante = lk;
+            mu_old = mu;
+            Delta_old = Delta;
+            Gama_old = Gama;
+            toc
+        end
+        if settings.criteria
+            [~, cl] = max(tal, [], 2);
+            icl = 0;
+            for j = 1 : g
+                icl = icl + sum(log(pii(j) .* dmvt_ls(y(cl == j), mu{j}, Sigma{j}, shape{j}, nu)));
+            end
+        end
     elseif strcmp(family, 'Skew.t')
         delta = cell(1, g);
         Delta = cell(1, g);
@@ -225,9 +340,227 @@ function out = smsn_mmix(y, nu, initial_values, settings)
             end
         end
     elseif strcmp(family, 'Normal')
+        delta = cell(1, g);
+        Delta = cell(1, g);
+        Gama = cell(1, g);
 
+        for k = 1 : g
+            Delta{k} = zeros(1, p);
+            shape{k} = zeros(1, p);
+            Gama{k} = Sigma{k};
+        end
+
+        if settings.uni_Gama
+            Gama_uni = plus(Gama{:}) / g;
+            Gama(:) = {Gama_uni};
+        end
+        
+        mu_old = mu;
+        Delta_old = Delta;
+        Gama_old = Gama;
+
+        criterio = 1;
+        count = 0;
+        lkante = 1;
+
+        while ((criterio > settings.error) && (count <= settings.iter_max))
+            tic
+            count = count + 1;
+            tal = zeros(n, g);
+            S1 = zeros(n, g);
+            S2 = zeros(n, g);
+            S3 = zeros(n, g);
+            for j = 1 : g 
+                Dif = y - repmat(mu{j}, [n, 1]);
+                Mtij2 = 1./(1 + Delta{j} * (Gama{j} \ transpose(Delta{j})));
+                Mtij = sqrt(Mtij2);
+                mtuij = sum(repmat(Mtij2 .* (Delta{j} / Gama{j}), [n, 1]) .* Dif, 2);
+                A = mtuij ./ Mtij;
+
+                prob = normcdf(A);
+                prob(prob == 0) = 1/intmax;
+
+                E = normpdf(A) / prob;
+                u = ones(1, n);
+
+                d1 = dmvSN(y, mu{j}, Sigma{j}, shape{j});
+                d1(d1 == 0) = 1/intmax;
+                d2 = d_mixedmvSN(y, pii, mu, Sigma, shape);
+                d2(d2 == 0) = 1/intmax;
+                
+                tal(:, j) = d1 .* pii(j)./d2;
+                S1(:, j) = tal(:, j) .* u;
+                S2(:, j) = tal(:, j) .* (mtuij .* u + Mtij .* E);
+                S3(:, j) = tal(:, j) .* (mtuij.^2 .* u + Mtij2 + Mtij .* mtuij .* E);
+
+                pii(j) = (1./n) .* sum(tal(:, j));
+
+                mu{j} = sum(S1(:, j) .* y - S2(:, j) .* repmat(Delta_old{j}, [n, 1]), 1)./sum(S1(:, j));
+                Dif = y - mu{j};
+                Delta{j} = sum(S2(:, j) .* Dif, 1)./sum(S3(:, j));
+
+                sum2 = zeros(p);
+                for i = 1 : n
+                    sum2 = sum2 + (S1(i, j) .* (transpose(y(i, :) - mu{j})) * (y(i, :) - mu{j}));
+                end
+
+                Gama{j} = sum2 ./ sum(tal(:, j));
+
+                if ~settings.uni_Gama
+                    Sigma{j} = Gama{j} + transpose(Delta{j}) * Delta{j};
+                    shape{j} = zeros(1, p);
+                end
+            end
+
+            %{
+            if settings.uni_Gama
+                GS = 0;
+                for j = 1 : g 
+                    GS = GS %+ (tal(:, j) .* Gama{j});
+                end
+                Gama_uni = transpose(sum(transpose(GS), 2))
+                for j = 1 : g 
+                    Gama{j} = Gama_uni;
+                    Sigma{j} = Gama{j} + transpose(Delta{j}) * Delta{j};
+                    shape{j} = zeros(1, p);
+                end
+            end
+            %}
+           
+            pii(g) = 1 - (sum(pii) - pii(g));
+
+            zero_pos = pii == 0;
+            pii(zero_pos) = 1e-10;
+            pii(pii == max(pii)) = max(pii) - sum(pii(zero_pos));
+
+            lk = sum(log(d_mixedmvSN(y, pii, mu, Sigma, shape)));
+            criterio = abs((lk./lkante) - 1);
+
+            lkante = lk;
+            mu_old = mu;
+            Delta_old = Delta;
+            Gama_old = Gama;
+            toc
+        end
+        if settings.criteria
+            [~, cl] = max(tal, [], 2);
+            icl = 0;
+            for j = 1 : g
+                icl = icl + sum(log(pii(j) .* dmvSN(y(cl == j), mu{j}, Sigma{j}, shape{j})));
+            end
+        end
     elseif strcmp(family, 'Skew.Normal')
+        delta = cell(1, g);
+        Delta = cell(1, g);
+        Gama = cell(1, g);
 
+        for k = 1 : g
+            delta{k} = shape{k} ./ sqrt(1 + shape{k} * transpose(shape{k}));
+            Delta{k} = transpose(matrix_sqrt(Sigma{k}) * transpose(delta{k}));
+            Gama{k} = Sigma{k} - transpose(Delta{k}) * Delta{k};
+        end
+
+        if settings.uni_Gama
+            Gama_uni = plus(Gama{:}) / g;
+            Gama(:) = {Gama_uni};
+        end
+        
+        mu_old = mu;
+        Delta_old = Delta;
+        Gama_old = Gama;
+
+        criterio = 1;
+        count = 0;
+        lkante = 1;
+
+        while ((criterio > settings.error) && (count <= settings.iter_max))
+            tic
+            count = count + 1;
+            tal = zeros(n, g);
+            S1 = zeros(n, g);
+            S2 = zeros(n, g);
+            S3 = zeros(n, g);
+            for j = 1 : g 
+                Dif = y - repmat(mu{j}, [n, 1]);
+                Mtij2 = 1./(1 + Delta{j} * (Gama{j} \ transpose(Delta{j})));
+                Mtij = sqrt(Mtij2);
+                mtuij = sum(repmat(Mtij2 .* (Delta{j} / Gama{j}), [n, 1]) .* Dif, 2);
+                A = mtuij ./ Mtij;
+
+                prob = normcdf(A);
+                prob(prob == 0) = 1/intmax;
+
+                E = normpdf(A) / prob;
+                u = ones(1, n);
+
+                d1 = dmvSN(y, mu{j}, Sigma{j}, shape{j});
+                d1(d1 == 0) = 1/intmax;
+                d2 = d_mixedmvSN(y, pii, mu, Sigma, shape);
+                d2(d2 == 0) = 1/intmax;
+                
+                tal(:, j) = d1 .* pii(j)./d2;
+                S1(:, j) = tal(:, j) .* u;
+                S2(:, j) = tal(:, j) .* (mtuij .* u + Mtij .* E);
+                S3(:, j) = tal(:, j) .* (mtuij.^2 .* u + Mtij2 + Mtij .* mtuij .* E);
+
+                pii(j) = (1./n) .* sum(tal(:, j));
+
+                mu{j} = sum(S1(:, j) .* y - S2(:, j) .* repmat(Delta_old{j}, [n, 1]), 1)./sum(S1(:, j));
+                Dif = y - mu{j};
+                Delta{j} = sum(S2(:, j) .* Dif, 1)./sum(S3(:, j));
+
+                sum2 = zeros(p);
+                for i = 1 : n
+                    sum2 = sum2 + (S1(i, j) .* (transpose(y(i, :) - mu{j})) * (y(i, :) - mu{j}) - ...
+                                   S2(i, j) .* (transpose(Delta{j}) * (y(i, :) - mu{j})) - ...
+                                   S2(i, j) .* (transpose(y(i, :) - mu{j}) * (Delta{j})) + ...
+                                   S3(i, j) .* (transpose(Delta{j}) * (Delta{j})));
+                end
+
+                Gama{j} = sum2 ./ sum(tal(:, j));
+
+                if ~settings.uni_Gama
+                    Sigma{j} = Gama{j} + transpose(Delta{j}) * Delta{j};
+                    shape{j} = (Delta{j} / matrix_sqrt(Sigma{j})) / (1 - Delta{j} / Sigma{j} * transpose(Delta{j})).^(1/2);
+                end
+            end
+            %{
+            if settings.uni_Gama
+                GS = 0;
+                for j = 1 : g 
+                    GS = GS %+ (tal(:, j) .* Gama{j});
+                end
+                Gama_uni = transpose(sum(transpose(GS), 2))
+                for j = 1 : g 
+                    Gama{j} = Gama_uni;
+                    Sigma{j} = Gama{j} + transpose(Delta{j}) * Delta{j};
+                    shape{j} = zeros(1, p);
+                end
+            end
+            %}
+
+            pii(g) = 1 - (sum(pii) - pii(g));
+
+            zero_pos = pii == 0;
+            pii(zero_pos) = 1e-10;
+            pii(pii == max(pii)) = max(pii) - sum(pii(zero_pos));
+
+            lk = sum(log(d_mixedmvSN(y, pii, mu, Sigma, shape)));
+            criterio = abs((lk./lkante) - 1);
+
+            lkante = lk;
+            mu_old = mu;
+            Delta_old = Delta;
+            Gama_old = Gama;
+            toc
+        end
+        if settings.criteria
+            [~, cl] = max(tal, [], 2);
+            icl = 0;
+            for j = 1 : g
+                icl = icl + sum(log(pii(j) .* dmvSN(y(cl == j), mu{j}, Sigma{j}, shape{j})));
+            end
+        end
     end 
     out.params = repmat(struct('mu', 0, 'Sigma', 0, 'shape', 0), [1, g]);
     for j = 1 : g 
